@@ -32,4 +32,6 @@ Zawarte na ten moment typy agentów oraz ich funkcje/interakcje
   -proliferation
   -śmierć
   
-  Pracuję jeszcze nad rozwiązaniem indeksowania przy dodawaniu i usuwaniu agentów. Widzę że problem występuje, ponieważ kiedy wizualizacja modelu jest uruchumiona można zaobserwować (zwłaszcza po dłuższym czasie) że istnieją agenty które nie poruszają się, a jednak istnieją w ramach modelu. 
+  Pracuję jeszcze nad rozwiązaniem indeksowania przy dodawaniu i usuwaniu agentów. Widzę że problem występuje,
+  ponieważ kiedy wizualizacja modelu jest uruchumiona można zaobserwować (zwłaszcza po dłuższym czasie) że istnieją agenty które nie poruszają się,
+  a jednak istnieją w ramach modelu. 
