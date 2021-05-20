@@ -49,15 +49,14 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
         self.action_count=0
     def proliferation(self): #funkcja odpowiedzialna za mechanizm proliferacji
         x=randint(1,10) 
-        if x<=self.proliferation_rate: #prawdopodobieństwo zajścia proliferacji zależy od zmiennej proliferation_rate
-            self.action_count+=1
-            new=len(self.model.new_agents)+1
-            dead=len(self.model.dead_agents)
-            agents=self.model.num_agents
-            self.model.available_ids.add(agents+new-dead+2)#dodawanie nowych id do listy przechowującej id do wykorzystania
-            #self.model.available_ids.add(agents+new-dead+3)
-            id=min(self.model.available_ids) # jako id nowego agenta przyjmujemy najmniejsze wolne id
-            self.model.available_ids.remove(id) #usuwamy najmniejsze id z setu wolnych id
+        if x<=self.proliferation_rate and self.action_count==0: #prawdopodobieństwo zajścia proliferacji zależy od zmiennej proliferation_rate
+            
+            if len(self.model.available_ids)==0:
+                self.model.max_id+=1
+                id=self.model.max_id
+            else:
+                id=min(self.model.available_ids)
+                self.model.available_ids.remove(id)
             
             #tworzymy nowego agenta zgodnie z typem agenta który dokonuje proliferacji
             if self.type=="LimfocytB":
@@ -118,11 +117,11 @@ class LimfocytB(Cell):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
             self.move()
             x=randint(1,100)
             if x<=2:
                 self.aktywacja_wirusa()
+            self.proliferation()
     def aktywacja_wirusa(self): #funckaj która zmienia LimfocytB z zainfekowanyLimfocytB
         n=ZainfekowanyLimfocytB(self.unique_id,self.model,"ZainfekowanyLimfocytB")
         n.pos=self.pos #pozycja pozostaje ta sama, id również
@@ -144,10 +143,10 @@ class ZainfekowanyLimfocytB(Cell):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
             self.move()
             self.infection()
             self.antigen_activation()
+            self.proliferation()
         
     def infection(self): #funkcja odpowiedzialna za infekowanie innych LimfocytówB
         cellmates=self.model.grid.get_cell_list_contents([self.pos])
@@ -160,17 +159,18 @@ class ZainfekowanyLimfocytB(Cell):
         for agent in neighbors:
             if agent.type=="LimfocytB" or agent.type=="LimfocytT":
                 agent.activation_matrix[0]=True #tablica ta ma tylko znaczenie w przypadku Limfocytów B
-                agent.activate()
-                self.action_count+=1 
+                if agent.action_count==0:
+                    agent.activate()
+                    self.action_count+=1 
                 #możliwe że zmienna action_count powinna się zwiększać zgodnie z ilością aktytowanych agentów
 class AktywowanyLimfocytB(LimfocytB):
     def step(self):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
             self.wspomaganie_LimfocytT()
             self.move()
+            self.proliferation()
     def wspomaganie_LimfocytT(self): #funkcja wspomagająca proliferację LimfocytówT, 
         neighbors=self.model.grid.get_neighbors(self.pos,True, False, 2)
         for agent in neighbors:
@@ -183,9 +183,8 @@ class LimfocytT(Cell):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
             self.move()
-        
+            self.proliferation()
     def activate(self):
         n=AktywowanyLimfocytT(self.unique_id, self.model, "AktywowanyLimfocytT")
         n.pos=self.pos
@@ -196,10 +195,11 @@ class AktywowanyLimfocytT(LimfocytT):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
+            
             self.move()
             self.LimfocytB_activation()
             self.cytotoxicity()
+            self.proliferation()
         
     def LimfocytB_activation(self):
         neighbors=self.model.grid.get_neighbors(self.pos,True, True, 1)
@@ -213,8 +213,9 @@ class LimfocytTreg(Cell):
         if self.health<1:
             self.death()
         else:
-            self.proliferation()
+            
             self.move()
+            self.proliferation()
 
 class Myelin(Cell):
     def step(self):
@@ -243,7 +244,7 @@ class Model(Model):
             y=self.random.randrange(self.grid.height)
             self.grid.place_agent(a,(x,y))
             cells=self.grid.get_neighborhood(a.pos, False, False, 1)
-            id=self.num_agents-i
+            id=self.num_agents-i*4
             for cell in cells:
                 m=Myelin(id, self, "Myelin")
                 self.schedule.add(m)
@@ -273,8 +274,7 @@ class Model(Model):
             y=self.random.randrange(self.grid.height)
             self.grid.place_agent(a,(x,y))
 
-        self.available_ids.add(self.num_agents+1)
-        self.max_id=self.num_agents
+        self.max_id=self.num_agents-1
 
         self.datacollector=DataCollector(
             model_reporters={"Gini":compute_gini},
@@ -307,7 +307,5 @@ class Model(Model):
             self.num_agents+=1
             self.grid.place_agent(n, n.pos)
         self.new_agents.clear()
-        self.max_id=max(self.available_ids)
-        self.available_ids.add(self.num_agents+1)
             
 

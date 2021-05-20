@@ -12,6 +12,8 @@ def agent_portrayal(agent):
 				"Color": "blue",
 				"Filled": "true",
 				"Layer": 0,
+				"text": agent.unique_id,
+				"text_color": "black",
 				"r": 0.2}
 	if agent.type=='Neuron':
 		portrayal["Color"]="red"
