@@ -45,7 +45,7 @@ grid = CanvasGrid(agent_portrayal, 20, 20, 500, 500)
 server = ModularServer(Model,
 						[grid],
 						"Ms Model",
-						{"N":10, "B":60, "T":20, "Treg":5, "width":20, "height":20})
+						{"N":10, "B":60, "T":20, "Treg":10, "width":20, "height":20})
 #deklaracja modelu Liczba Neuronów, Liczba Limfocytów B, Liczba Limfocytów T, Liczba Limfocytów Treg, Szerokosć, Wysokość)
 server.port = 8521 # The default
 server.launch()

@@ -23,6 +23,9 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
          #ponieważ potrzebuje on bodziec zarówno od zainfekowanegoLimfocytaB jak i od aktywowanegoLimfocytaT
         self.proliferation_rate=1 #zmienna odpowiadająca za szybkość proliferacji agenta
         self.death_rate=1 
+        self.activated=False
+        self.infected=False
+        self.dead=False
         self.action_count=0 #zmienna odpowiadająca ilości akcji wykonanych przez agenta(proliferacja, aktywacja itd)
         if self.type=="Neuron":
             self.myelin_number=4 #zmienna odpowiadająca ilości komórek mielinowych otaczających agenta 
@@ -49,7 +52,7 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
         self.action_count=0
     def proliferation(self): #funkcja odpowiedzialna za mechanizm proliferacji
         x=randint(1,10) 
-        if x<=self.proliferation_rate and self.action_count==0: #prawdopodobieństwo zajścia proliferacji zależy od zmiennej proliferation_rate
+        if (x<=self.proliferation_rate) and (self.action_count==0) and(self.activated==False) and (self.dead==False): #prawdopodobieństwo zajścia proliferacji zależy od zmiennej proliferation_rate
             
             if len(self.model.available_ids)==0:
                 self.model.max_id+=1
@@ -79,14 +82,16 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
             try: 
                 n.pos=self.random.choice(possible_steps) #wybraną pozycję zapisujemy w odpowiednim polu agenta
                 self.model.new_agents.add(n) #dodajemy nowego agenta do listy nowych agentów
+                self.action_count+=1
             except UnboundLocalError:
                 print("")
 
 
     def death(self):
-        if self.health<=0:
+        if (self.health<=0) and (self.activated==False) and (self.infected==False):
             self.model.dead_agents.add(self) #dodajemy agenta do setu zmarłych agentów
             self.model.available_ids.add(self.unique_id) # dodajemy id agenta do setu wolnych id
+            self.dead=True
 
     def cytotoxicity(self):
         #wybieramy sąsiadujących agentów w odległości 1 pól
@@ -114,6 +119,7 @@ class Neuron(Cell):
 
 class LimfocytB(Cell):
     def step(self):
+        self.action_count=0
         if self.health<1:
             self.death()
         else:
@@ -122,21 +128,24 @@ class LimfocytB(Cell):
             if x<=2:
                 self.aktywacja_wirusa()
             self.proliferation()
+        
     def aktywacja_wirusa(self): #funckaj która zmienia LimfocytB z zainfekowanyLimfocytB
-        n=ZainfekowanyLimfocytB(self.unique_id,self.model,"ZainfekowanyLimfocytB")
-        n.pos=self.pos #pozycja pozostaje ta sama, id również
-        self.model.new_agents.add(n) #dodajemy do setu nowych agentów
-        self.model.dead_agents.add(self) #dodajemy do setu zmarłuch agentów
-        self.action_count+=1
+        if  (self.infected==False) and (self.dead==False):
+            n=ZainfekowanyLimfocytB(self.unique_id,self.model,"ZainfekowanyLimfocytB")
+            n.pos=self.pos #pozycja pozostaje ta sama, id również
+            self.model.new_agents.add(n) #dodajemy do setu nowych agentów
+            self.model.dead_agents.add(self) #dodajemy do setu zmarłuch agentów
+            self.infected=True
 
     def activate(self):
         d=[True, True]
-        if self.activation_matrix==d: #sprawdzamy czy otrzymano bodźce zarówno od Limfocyta T 
-                                        #jak i od zainfekowanego limfocyta B
-            n=AktywowanyLimfocytB(self.unique_id, self.model, "AktywowanyLimfocytB")
+        if (self.activation_matrix==d) and (self.action_count==0) and (self.activated==False) and (self.dead==False): #sprawdzamy czy otrzymano bodźce zarówno od Limfocyta T 
+            n=AktywowanyLimfocytB(self.unique_id, self.model, "AktywowanyLimfocytB")#jak i od zainfekowanego limfocyta B
             n.pos=self.pos
             self.model.new_agents.add(n)
             self.model.dead_agents.add(self)
+            self.action_count+=1
+            self.activated=True
 
 class ZainfekowanyLimfocytB(Cell):
     def step(self):
@@ -157,11 +166,13 @@ class ZainfekowanyLimfocytB(Cell):
     def antigen_activation(self): #funkcja odpowiedzialna za aktywowanie sąsiednik Limfocytów B i T
         neighbors=self.model.grid.get_neighbors(self.pos,True, False, 1)
         for agent in neighbors:
-            if agent.type=="LimfocytB" or agent.type=="LimfocytT":
-                agent.activation_matrix[0]=True #tablica ta ma tylko znaczenie w przypadku Limfocytów B
-                if agent.action_count==0:
+            if agent.type=="LimfocytT":
                     agent.activate()
                     self.action_count+=1 
+            if agent.type=="LimfocytB":
+                agent.activation_matrix[0]==True
+                agent.activate()
+                self.action_count+=1
                 #możliwe że zmienna action_count powinna się zwiększać zgodnie z ilością aktytowanych agentów
 class AktywowanyLimfocytB(LimfocytB):
     def step(self):
@@ -180,16 +191,20 @@ class AktywowanyLimfocytB(LimfocytB):
         
 class LimfocytT(Cell):
     def step(self):
+        self.action_count==0
         if self.health<1:
             self.death()
         else:
             self.move()
             self.proliferation()
     def activate(self):
-        n=AktywowanyLimfocytT(self.unique_id, self.model, "AktywowanyLimfocytT")
-        n.pos=self.pos
-        self.model.new_agents.add(n)
-        self.model.dead_agents.add(self)
+        if (self.activated==False) and (self.dead==False):
+            n=AktywowanyLimfocytT(self.unique_id, self.model, "AktywowanyLimfocytT")
+            n.pos=self.pos
+            self.model.new_agents.add(n)
+            self.model.dead_agents.add(self)
+            self.action_count+=1
+            self.activated=True
 class AktywowanyLimfocytT(LimfocytT):
     def step(self):
         if self.health<1:
@@ -215,11 +230,22 @@ class LimfocytTreg(Cell):
         else:
             
             self.move()
+            self.RegulacjaLimfocytówT()
             self.proliferation()
+    def RegulacjaLimfocytówT(self):
+        neighbors=self.model.grid.get_neighbors(self.pos, True, True,1)
+        for agent in neighbors:
+            if (agent.type=="LimfocyT") or (agent.type=="AktywowanyLimfocytT"):
+                agent.health-=1
 
 class Myelin(Cell):
     def step(self):
+        self.regeneracja()
         self.death()
+    def regeneracja(self):
+        x=randint(1,100)
+        if x<=20:
+            self.health+=1
 
 class Model(Model):
     def __init__(self, N, B, T, Treg, width,height):
@@ -235,6 +261,8 @@ class Model(Model):
         self.dead_agents=set()
         self.new_agents=set()
         self.max_id=0
+        self.step_count=1
+        open('new_and_dead.txt', 'w').close()
         # Create agents
         for i in range(self.num_neurons):
             a = Neuron(i, self,"Neuron")
@@ -284,11 +312,16 @@ class Model(Model):
         self.datacollector.collect(self)
         self.adding_removing()
         print("Liczba agentów: " + str(self.num_agents))
+        self.step_count+=1
         
     def running(self):
         self.step()
 
     def adding_removing(self): #funckja odpowiedzialna za dodawanie i usuwanie agentów
+
+        f=open("new_and_dead.txt", 'a')
+        f.write("Step " + str(self.step_count) +"\n")
+        f.write("======Dead agents======: "+"\n")
         for d in self.dead_agents:
             try:
                 self.schedule.remove(d)
@@ -300,12 +333,27 @@ class Model(Model):
                 self.grid._remove_agent(d.pos,d)
             except KeyError:
                 continue
-
+            f.write(str(d.unique_id) +" " + d.type +"\n")
         self.dead_agents.clear()
+        f.write("======New Agents=====: " +"\n")
         for n in self.new_agents:
             self.schedule.add(n)
             self.num_agents+=1
             self.grid.place_agent(n, n.pos)
+            if n.unique_id in self.available_ids:
+                self.available_ids.remove(n.unique_id)
+            f.write(str(n.unique_id) + " " + n.type +"\n")
         self.new_agents.clear()
+        m=1
+        n=0
+        for agent in self.schedule.agents:
+            if agent.unique_id>m:
+                m=agent.unique_id
+            if (agent.type=="LimfocytT") or (agent.type=="AktywowanyLimfocytT"):
+                n+=1
+        self.max_id=m
+        self.num_limfocytT=n
+
+        f.close()
             
 
