@@ -40,12 +40,32 @@ def agent_portrayal(agent):
 		portrayal["Color"]="yellow"
 		portrayal["r"]=0.2
 	return portrayal
-
-grid = CanvasGrid(agent_portrayal, 20, 20, 500, 500)
+chart1 = ChartModule([{"Label": "Populacja",
+                      "Color": "Black"}],
+                    data_collector_name='datacollector_population')
+chart2 = ChartModule([{"Label": "Populacja Limfocytów T",
+                      "Color": "Purple"}],
+                    data_collector_name='datacollector_T_population')
+chart3 = ChartModule([{"Label": "Populacja Limfocytów B",
+                      "Color": "Blue"}],
+                    data_collector_name='datacollector_B_population')
+chart4 = ChartModule([{"Label": "Populacja Limfocytów Treg",
+                      "Color": "Green"}],
+                    data_collector_name='datacollector_Treg_population')
+chart5 = ChartModule([{"Label": "Populacja Aktywnych Limfocytów B",
+                      "Color": "Blue"}],
+                    data_collector_name='datacollector_B_active_population')
+chart6 = ChartModule([{"Label": "Populacja Aktywnych Limfocytów T",
+                      "Color": "Purple"}],
+                    data_collector_name='datacollector_T_active_population')
+chart7 = ChartModule([{"Label": "Populacja Zainfekowanych Limfocytów B",
+                      "Color": "Black"}],
+                    data_collector_name='datacollector_B_infected_population')
+grid = CanvasGrid(agent_portrayal, 30, 30, 500, 500)
 server = ModularServer(Model,
-						[grid],
+						[grid, chart1,chart2,chart3,chart4,chart5,chart6,chart7],
 						"Ms Model",
-						{"N":10, "B":60, "T":20, "Treg":10, "width":20, "height":20})
+						{"N":10, "B":50, "T":33, "Treg":17, "width":30, "height":30})
 #deklaracja modelu Liczba Neuronów, Liczba Limfocytów B, Liczba Limfocytów T, Liczba Limfocytów Treg, Szerokosć, Wysokość)
 server.port = 8521 # The default
 server.launch()
