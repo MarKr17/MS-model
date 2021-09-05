@@ -66,8 +66,18 @@ def myelin_population(model):
             n+=1
     return n
 
+def myelin_healths(model):
+    n=0
+    for agent in model.schedule.agents:
+        if agent.type=="Myelin":
+            n+=agent.health
+            #print(str(n))
+    if n<0:
+        n=0
+    return n
 
-class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
+
+class Agent(Agent): #główna klasa ,,parent" wszystkich agentów
     def __init__(self, unique_id, model,type):
         super().__init__(unique_id, model)
         self.health = 10
@@ -80,27 +90,37 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
         self.activated=False
         self.infected=False
         self.dead=False
+        self.prob_dmg=1000 # zmienna określająca prawdopodobieństwo otrzymania dmg dla neuronu
         self.action_count=0 #zmienna odpowiadająca ilości akcji wykonanych przez agenta(proliferacja, aktywacja itd)
         if self.type=="Neuron":
-            self.myelin_number=8 #zmienna odpowiadająca ilości komórek mielinowych otaczających agenta 
+            self.myelin_number=8 #zmienna odpowiadająca liczbie komórek mielinowych otaczających agenta 
+            self.regeneration_counter=0#zmienna odpowiadająca liczbie wykonanych regeneracji przez dany neuron
+            self.prob_dmg=0
         else:
             self.myelin_number=0
+        if self.type=="Myelin":
+            self.health=100
         #print("Hi im agent "+str(unique_id)+" "+type)
         if "LimfocytB" in self.type:
-            self.health=10
-            self.proliferation_rate=7
+            self.health=25
+            #self.proliferation_rate=3+math.floor(self.model.cytokina/30)
+            self.proliferation_rate=7+math.floor(self.model.cytokina/10)
             self.death_rate=40
         if "Aktywowany" in self.type:
-            self.death_rate=60
+            self.death_rate=90
+            #self.proliferation_rate=1+math.floor(self.model.cytokina/10)
+            self.proliferation_rate=2
             proliferation_rate=1
         if "Treg" in self.type:
-            self.health=10
-            self.death_rate=80
-            self.proliferaton_rate=0
+            self.health=15
+            self.death_rate=50
+            self.proliferaton_rate=2
+            self.proliferation_rate=3#+math.floor(self.model.cytokina/120)
         if self.type=="LimfocytT":
             self.health=10
             self.death_rate=50
-            self.proliferation_rate=2
+            self.proliferation_rate=2+math.floor(self.model.cytokina/10)
+            #self.proliferation_rate=1
         if self.type=="ZainfekowanyLimfocytB":
             self.death_rate=100
             self.health=10
@@ -112,18 +132,7 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
             self.move()
             self.death()
     def move(self): #funkcja odpowiadająca za ruch agenta na planszy
-        '''possible_steps=self.model.grid.get_neighborhood(
-            self.pos,
-            moore=True,
-            include_center=False)
-        n=0;
-        new_position=self.random.choice(possible_steps)
-        while not self.cell_checking(new_position):
-            n+=1
-            if n>8:
-                break
-            new_position=self.random.choice(possible_steps)'''
-
+        
         d=self.direction()
         v=np.array(np.asarray(self.pos))
         v2=d+v
@@ -151,21 +160,11 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
         if self.health<0:
             self.health=0;
         self.action_count=0
-    def cell_checking(self, new_position):
-        '''radius=10-math.floor(self.model.cytokina/2)
-        if radius<0:
-            radius=0
-        neighborhood=self.model.grid.get_neighborhood(new_position, moore=True, include_center=False, radius=radius)
-        for cell in neighborhood:
-            if not self.model.grid.is_cell_empty(cell):
-                return False
-        return True
-        '''
-
+    
     def proliferation(self): #funkcja odpowiedzialna za mechanizm proliferacji
         x=randint(1,100) 
-        bools=[False,False,False,False]
-        bools2=[self.proliferation_rate, self.activated, self.dead, self.infected]
+        bools=[False,False,False,True]
+        bools2=[self.activated, self.dead, self.infected, x<=self.proliferation_rate]
         if bools==bools2: #prawdopodobieństwo zajścia proliferacji zależy od zmiennej proliferation_rate
             
             if len(self.model.available_ids)==0:
@@ -209,29 +208,31 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
 
     def cytotoxicity(self):
         #wybieramy sąsiadujących agentów w odległości 1 pól
-        neighbors=self.model.grid.get_neighbors(self.pos, True, True, 2) 
+        mimicry=1 #0, 0.25 0.5 0.75 1 zrobić 5 powtórzeń na wartość
+        neighbors=self.model.grid.get_neighbors(self.pos, True, True, 3) 
         affected=['ZainfekowanyLimfocytB', 'Neuron', 'Myelin'] #lista typów agentów na które działa efekt cytotoksyczny
+        x=randint(1,1000)
         for agent in neighbors:
             if agent.type in affected:
                 #warunek ten odnosi się do neuronu, ponieważ może on otrzymać ,,obrażenia",
                 #tylko kiedy jest pozbawiony osłonki mielinowej
-                if agent.myelin_number<=0: 
-                    #print("Cytotoxicity")
-                    agent.health-=1+(math.floor(self.model.cytokina/10))
+                if x<=agent.prob_dmg: 
+                    if agent.type=="Myelin":
+                        agent.health-=1+(math.floor(self.model.cytokina))*10*mimicry
+                    else:
+                        agent.health-=1+(math.floor(self.model.cytokina/10))
+
                     if agent.health<0:
                         agent_health=0;
                     self.action_count+=1
-                    self.model.cytokina+=1
+                    self.model.B+=1
 
     def direction(self):
         point=self.attraction_point()
         dest_vector=np.array(np.asarray(point))
         org_vector=np.array(np.asarray(self.pos))
         direct=dest_vector-org_vector
-        repultion_rate=100-math.floor(self.model.cytokina/5)
-        x=randint(1,100)
-        if x<=repultion_rate:
-            direct=direct*(-1)
+        direct=direct*(-1)
         for i in range(0,2):
             if direct[[i]]<0:
                 direct[[i]]=-1
@@ -247,21 +248,19 @@ class Cell(Agent): #główna klasa ,,parent" wszystkich agentów
         #magnitude=G/disquared
         return direct
     def attraction_point(self):
-        #rad=5-math.floor(self.model.cytokina/10)
-        #if rad<1:
-            #rad=1
         rad=5
         point_contents=[]
         neighbors=self.model.grid.get_neighborhood(self.pos,moore=True, include_center=False, radius=rad)
         point=self.random.choice(neighbors)
         for cell in neighbors:
             cell_contents=self.model.grid.get_cell_list_contents(cell)
-            if len(cell_contents) >=len(point_contents):
+            if len(cell_contents)>=len(point_contents):
                 point=cell
+                point_contents=self.model.grid.get_cell_list_contents(point)
         return point
 
     
-class Neuron(Cell):
+class Neuron(Agent):
     def step(self):
         #fragment odpowiadający za sprawdzenie ile żywych komórek mielinowych znajduje się przy neuronie w danym momencie
         neighbors=self.model.grid.get_neighbors(self.pos, True, False,1)
@@ -270,27 +269,36 @@ class Neuron(Cell):
             if agent.type=='Myelin':
                 m+=1
         self.myelin_number=m
+        self.prob_dmg= 1000 - (m*125)
         #print("myelin_number: "+str(self.myelin_number))
-        if self.myelin_number<8:
-            self.regeneracja()
+        self.regeneracja()
         self.death()
     def regeneracja(self):
         #print("Regeneracja")
         neighborhood=self.model.grid.get_neighborhood(self.pos, True, False,1)
         no_myelin= True
+        max_regeneration=8#tyle osłonek mielinowych może być zregenerowanych w jednym kroku
+        #prob=100-self.model.cytokina
+        #x=randint(1,100)
         for cell in neighborhood:
             contents=self.model.grid.get_cell_list_contents(cell)
             for agent in contents:
                 if agent.type=="Myelin":
                     no_myelin=False
+                    agent.health=min(100,agent.health+self.health)
             if no_myelin:
-                self.addMyelin(self, cell)
-                print("cell"+ str(cell))
+                max_regeneration-=1
+                if max_regeneration>=0:
+                    self.addMyelin(self, cell)
+                    print("cell"+ str(cell))
+
                 
 
     def addMyelin(self, x,y):
         #regeneration_rate=100-math.floor(self.model.cytokina/10)
         print("Add myelin")
+        #health=10-math.floor(self.regeneration_counter/2)
+        health=10*self.health
         regeneration_rate=100
         x=randint(1,100)
         if x<=regeneration_rate:
@@ -304,9 +312,11 @@ class Neuron(Cell):
             n=Myelin(id,self.model,"Myelin")
             print("x:"+str(x)+"y:"+str(y))
             n.pos=y
+            n.health=health
             self.model.new_agents.add(n)
-            if self.model.cytokina>=1:
-                self.model.cytokina-=1
+            self.regeneration_counter+=1
+            if self.model.B>=1:
+                self.model.B-=1
 
 
 
@@ -315,9 +325,11 @@ class Neuron(Cell):
 
 
 
-class LimfocytB(Cell):
+class LimfocytB(Agent):
     def step(self):
-        #self.proliferation_rate=7+math.floor(self.model.cytokina/10)
+        #self.proliferation_rate+=math.floor(self.model.cytokina/100)
+        #print("proliferation_rate"+str(self.proliferation_rate))
+        self.proliferation_rate+=1
         self.action_count=0
         if self.health<1:
             self.death()
@@ -339,24 +351,24 @@ class LimfocytB(Cell):
             n.pos=self.pos
             self.model.new_agents.add(n)
             self.model.dead_agents.add(self)
-            self.action_count+=1
+            #self.action_count+=1
             self.infected=True
             self.dead=True
 
     def activate(self):
         d=[True, True]
-        x=[False,False,False]
+        x=[False,False,False, True]
         #if (self.activation_matrix==d) and (self.action_count==0) and (self.activated==False) and (self.dead==False): #sprawdzamy czy otrzymano bodźce zarówno od Limfocyta T 
-        if [self.activated,self.dead, self.infected]==x:
+        if [self.activated,self.dead, self.infected, self.activation_matrix==d]==x:
             n=AktywowanyLimfocytB(self.unique_id, self.model, "AktywowanyLimfocytB")#jak i od zainfekowanego limfocyta B
             n.pos=self.pos
             self.model.new_agents.add(n)
             self.model.dead_agents.add(self)
-            self.action_count+=1
+            #self.action_count+=1
             self.activated=True
             self.dead=True
 
-class ZainfekowanyLimfocytB(Cell):
+class ZainfekowanyLimfocytB(Agent):
     def step(self):
         if self.health<1:
             self.death()
@@ -385,13 +397,14 @@ class ZainfekowanyLimfocytB(Cell):
                     agent.activate()
                     self.action_count+=1 
                 if agent.type=="LimfocytB":
-                    agent.activation_matrix[0]==True
+                    agent.activation_matrix[0]=True
                     agent.activate()
                     self.action_count+=1
                     #możliwe że zmienna action_count powinna się zwiększać zgodnie z ilością aktytowanych agentów
 class AktywowanyLimfocytB(LimfocytB):
     def step(self):
         #self.proliferation_rate=1+math.floor(self.model.cytokina/10)
+        #self.proliferation_rate=0
         if self.health<1:
             self.death()
         else:
@@ -399,7 +412,7 @@ class AktywowanyLimfocytB(LimfocytB):
             self.move()
             self.proliferation()
     def wspomaganie_LimfocytT(self): #funkcja wspomagająca proliferację LimfocytówT, 
-        support_rate=1+math.floor(self.model.cytokina/2)
+        support_rate=1+math.floor(self.model.cytokina/10)
         x=randint(1,10)
         if x<=support_rate:
             neighbors=self.model.grid.get_neighbors(self.pos,True, False, 2)
@@ -408,10 +421,8 @@ class AktywowanyLimfocytB(LimfocytB):
                     agent.proliferation_rate+=1
                     self.action_count+=1
         
-class LimfocytT(Cell):
+class LimfocytT(Agent):
     def step(self):
-        #self.proliferation_rate=2+math.floor(self.model.cytokina/10)
-        self.action_count==0
         if self.health<1:
             self.death()
         else:
@@ -419,16 +430,17 @@ class LimfocytT(Cell):
             self.proliferation()
         #print("Agent: "+self.type+" Health: "+str(self.health))
     def activate(self):
-        if (self.activated==False) and (self.dead==False):
+        x=[False,False]
+        if [self.activated,self.dead]==x:
             n=AktywowanyLimfocytT(self.unique_id, self.model, "AktywowanyLimfocytT")
             n.pos=self.pos
             self.model.new_agents.add(n)
             self.model.dead_agents.add(self)
             self.action_count+=1
             self.activated=True
+            self.dead=True
 class AktywowanyLimfocytT(LimfocytT):
     def step(self):
-        self.proliferation_rate=3+math.floor(self.model.cytokina/10)
         if self.health<1:
             self.death()
         else:
@@ -450,9 +462,8 @@ class AktywowanyLimfocytT(LimfocytT):
                     agent.activation_matrix[1]=True
                     agent.activate()
                 self.action_count+=1
-class LimfocytTreg(Cell):
+class LimfocytTreg(Agent):
     def step(self):
-        #self.proliferation_rate=1+math.floor(self.model.cytokina/10)
         if self.health<1:
             self.death()
         else:
@@ -470,12 +481,12 @@ class LimfocytTreg(Cell):
                     agent.health-=2
                     if agent.health<0:
                         agent.health=0
-                    self.proliferation_rate+=1
-                    self.action_count+=1
-                    if self.model.cytokina>=1 :
-                        self.model.cytokina-=1
+                    #self.proliferation_rate+=1
+                    #self.action_count+=1
+                    if self.model.B>=1 :
+                        self.model.B-=1
                     
-class Myelin(Cell):
+class Myelin(Agent):
     def step(self):
         self.death()
 
@@ -501,6 +512,11 @@ class Model(Model):
         self.max_id=0
         self.step_count=1
         self.cytokina=0
+        self.cytokina_prev=0
+        self.sum=0
+        self.B=0
+        self.a=0.80
+        self.Ymax=100
         open('new_and_dead.txt', 'w').close()
         # Create agents
         neuron_positions=[
@@ -572,8 +588,13 @@ class Model(Model):
         self.datacollector_myelin_population=DataCollector(
             model_reporters={"Populacja osłonek mielinowych": myelin_population})
 
+        self.datacollector_myelin_healths=DataCollector(
+            model_reporters={"Suma punktów życia osłonek mielinowych": myelin_healths})
+
     def step(self):
         #print("self running: "+str(self.running()))
+
+
         self.schedule.step()
         self.datacollector_population.collect(self)
         self.datacollector_T_population.collect(self)
@@ -584,16 +605,28 @@ class Model(Model):
         self.datacollector_T_active_population.collect(self)
         self.datacollector_B_infected_population.collect(self)
         self.datacollector_myelin_population.collect(self)
+        self.datacollector_myelin_healths.collect(self)
         self.adding_removing()
+
+        self.datacollector_myelin_healths.get_model_vars_dataframe().to_csv(r'Data/myelin_healths25.txt', sep=' ', mode='w')
+        self.datacollector_T_population.get_model_vars_dataframe().to_csv(r'Data/T_population25.txt', sep=' ', mode='w')
+        self.datacollector_B_population.get_model_vars_dataframe().to_csv(r'Data/B_population25.txt', sep=' ', mode='w')
+        self.datacollector_Treg_population.get_model_vars_dataframe().to_csv(r'Data/Treg_population25.txt', sep=' ', mode='w')
+        self.datacollector_B_active_population.get_model_vars_dataframe().to_csv(r'Data/B_active_population25.txt', sep=' ', mode='w')
+        self.datacollector_T_active_population.get_model_vars_dataframe().to_csv(r'Data/T_active_population25.txt', sep=' ', mode='w')
+        self.datacollector_B_infected_population.get_model_vars_dataframe().to_csv(r'Data/B_infected_population25.txt', sep=' ', mode='w')
+
+
         print("Liczba agentów: " + str(self.num_agents))
         print("MaxID: " + str(self.max_id))
-        print("Cytokina"+str(self.cytokina))
-        for agent in self.schedule.agents:
-            if agent.type=="ZainfekowanyLimfocytB":
-                print("Agent: "+str(agent.type)+" "+str(agent.unique_id)+str(agent.pos)+"\n")
-        self.step_count+=1
-        if self.cytokina>=1 and self.step_count%5==0:
-            self.cytokina-=1
+        
+        
+        self.cytokina=max(min((self.B+self.cytokina_prev), self.Ymax)*self.a,0)
+
+        print("Cytokina "+str(self.cytokina))
+        print("Cytokina_prev "+str(self.cytokina_prev))
+
+
 
         f=open("agents.txt", 'a')
         f.write("======Step : "+str(self.step_count)+"\n")
@@ -601,6 +634,9 @@ class Model(Model):
             f.write("Agent: "+str(agent.type)+" "+str(agent.unique_id)+str(agent.pos)+"\n")
 
         f.close()
+        self.cytokina_prev=self.cytokina
+        self.B=0
+
     def running(self):
         self.step()
 
@@ -690,7 +726,3 @@ class Model(Model):
             y=self.random.randrange(self.grid.height)
             self.grid.place_agent(agent,(x,y))
             self.num_agents+=1
-
-        
-            
-
